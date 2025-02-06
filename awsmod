@@ -1,0 +1,94 @@
+#!/bin/bash
+
+AWS_CONFIG_FILE="$HOME/.aws/config"
+AWS_CREDENTIALS_FILE="$HOME/.aws/credentials"
+DEFAULT_REGION="ap-south-1"
+DEFAULT_OUTPUT_FORMAT="json"
+
+mkdir -p "$HOME/.aws"
+
+if [ "$1" == "check" ]; then
+    echo "testing awsmod"
+    exit 0
+fi
+
+if [ "$1" == "set-default" ]; then
+    echo -n "Enter profile name to make default: "
+    read PROFILE_TO_MAKE_DEFAULT
+    
+    REGION=$(awk -v profile="[profile $PROFILE_TO_MAKE_DEFAULT]" '$0 == profile {f=1; next} f && /region/ {print $3; exit}' "$AWS_CONFIG_FILE")
+    OUTPUT_FORMAT=$(awk -v profile="[profile $PROFILE_TO_MAKE_DEFAULT]" '$0 == profile {f=1; next} f && /output/ {print $3; exit}' "$AWS_CONFIG_FILE")
+    AWS_ACCESS_KEY_ID=$(awk -v profile="[$PROFILE_TO_MAKE_DEFAULT]" '$0 == profile {f=1; next} f && /aws_access_key_id/ {print $3; exit}' "$AWS_CREDENTIALS_FILE")
+    AWS_SECRET_ACCESS_KEY=$(awk -v profile="[$PROFILE_TO_MAKE_DEFAULT]" '$0 == profile {f=1; next} f && /aws_secret_access_key/ {print $3; exit}' "$AWS_CREDENTIALS_FILE")
+    
+    if [ -z "$REGION" ] || [ -z "$OUTPUT_FORMAT" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+        echo "Error: Profile '$PROFILE_TO_MAKE_DEFAULT' not found or missing values."
+        exit 1
+    fi
+    
+    sed -i '' -e "/\[default\]/,/^$/ s/region = .*/region = $REGION/" -e "/\[default\]/,/^$/ s/output = .*/output = $OUTPUT_FORMAT/" "$AWS_CONFIG_FILE"
+    sed -i '' -e "/\[default\]/,/^$/ s/aws_access_key_id = .*/aws_access_key_id = $AWS_ACCESS_KEY_ID/" -e "/\[default\]/,/^$/ s/aws_secret_access_key = .*/aws_secret_access_key = $AWS_SECRET_ACCESS_KEY/" "$AWS_CREDENTIALS_FILE"
+    
+    echo "Profile '$PROFILE_TO_MAKE_DEFAULT' is now set as default."
+    exit 0
+fi
+
+if [ "$1" == "list-profiles" ]; then
+    grep "\[profile" "$AWS_CONFIG_FILE" | sed 's/\[profile //;s/]//'
+    exit 0
+fi
+
+if [ "$1" == "clear" ]; then
+    rm -f "$AWS_CONFIG_FILE" "$AWS_CREDENTIALS_FILE"
+    echo "AWS configuration and credentials have been cleared."
+    exit 0
+fi
+
+if [ "$1" == "help" ]; then
+    echo "Usage: awsmod <command>"
+    echo "Commands:"
+    echo "  check         - Test awsmod script"
+    echo "  set-default   - Set a profile as default"
+    echo "  add-profile   - Add a new AWS profile"
+    echo "  list-profiles - List all AWS profiles"
+    echo "  clear         - Delete AWS config and credentials"
+    echo "  help          - Show this help message"
+    exit 0
+fi
+
+if [ "$1" == "add-profile" ]; then
+    echo -n "Enter profile name: "
+    read PROFILE_NAME
+
+    echo -n "Enter AWS Access Key ID: "
+    read AWS_ACCESS_KEY_ID
+
+    echo -n "Enter AWS Secret Access Key: "
+    read -s AWS_SECRET_ACCESS_KEY
+
+    echo ""
+    echo -n "Enter default region (press Enter for $DEFAULT_REGION): "
+    read REGION
+    if [ -z "$REGION" ]; then
+        REGION=$DEFAULT_REGION
+        echo "No input detected, setting default region: $DEFAULT_REGION"
+    fi
+
+    echo -n "Enter default output format (json or text, press Enter for $DEFAULT_OUTPUT_FORMAT): "
+    read OUTPUT_FORMAT
+    if [ -z "$OUTPUT_FORMAT" ]; then
+        OUTPUT_FORMAT=$DEFAULT_OUTPUT_FORMAT
+        echo "No input detected, setting default output format: $DEFAULT_OUTPUT_FORMAT"
+    fi
+    # Updating ~/.aws/config
+    if ! grep -q "\[profile $PROFILE_NAME\]" "$AWS_CONFIG_FILE" 2>/dev/null; then
+        echo -e "\n[profile $PROFILE_NAME]\nregion = $REGION\noutput = $OUTPUT_FORMAT" >> "$AWS_CONFIG_FILE"
+    fi
+
+    # Updating ~/.aws/credentials
+    if ! grep -q "\[$PROFILE_NAME\]" "$AWS_CREDENTIALS_FILE" 2>/dev/null; then
+        echo -e "\n[$PROFILE_NAME]\naws_access_key_id = $AWS_ACCESS_KEY_ID\naws_secret_access_key = $AWS_SECRET_ACCESS_KEY" >> "$AWS_CREDENTIALS_FILE"
+    fi
+
+    echo "AWS profile '$PROFILE_NAME' configured successfully."
+fi

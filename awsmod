@@ -59,13 +59,13 @@ fi
 if [ "$1" == "add-profile" ]; then
     echo -n "Enter profile name: "
     read PROFILE_NAME
-
+    
     echo -n "Enter AWS Access Key ID: "
     read AWS_ACCESS_KEY_ID
-
-    echo -n "Enter AWS Secret Access Key: "
+    
+    echo -n "Enter AWS Secret Access Key (If you are pasting, press return key twice): "
     read -s AWS_SECRET_ACCESS_KEY
-
+    
     echo ""
     echo -n "Enter default region (press Enter for $DEFAULT_REGION): "
     read REGION
@@ -73,22 +73,39 @@ if [ "$1" == "add-profile" ]; then
         REGION=$DEFAULT_REGION
         echo "No input detected, setting default region: $DEFAULT_REGION"
     fi
-
+    
     echo -n "Enter default output format (json or text, press Enter for $DEFAULT_OUTPUT_FORMAT): "
     read OUTPUT_FORMAT
     if [ -z "$OUTPUT_FORMAT" ]; then
         OUTPUT_FORMAT=$DEFAULT_OUTPUT_FORMAT
         echo "No input detected, setting default output format: $DEFAULT_OUTPUT_FORMAT"
     fi
+    
     # Updating ~/.aws/config
-    if ! grep -q "\[profile $PROFILE_NAME\]" "$AWS_CONFIG_FILE" 2>/dev/null; then
-        echo -e "\n[profile $PROFILE_NAME]\nregion = $REGION\noutput = $OUTPUT_FORMAT" >> "$AWS_CONFIG_FILE"
+    if grep -q "\[default\]" "$AWS_CONFIG_FILE" 2>/dev/null; then
+        sed -i '' -e "/\[default\]/,/^$/ s/region = .*/region = $REGION/" -e "/\[default\]/,/^$/ s/output = .*/output = $OUTPUT_FORMAT/" "$AWS_CONFIG_FILE"
+    else
+        echo -e "[default]\nregion = $REGION\noutput = $OUTPUT_FORMAT" > "$AWS_CONFIG_FILE"
     fi
-
+    
+    if grep -q "\[profile $PROFILE_NAME\]" "$AWS_CONFIG_FILE" 2>/dev/null; then
+        sed -i '' -e "/\[profile $PROFILE_NAME\]/,/^$/ s/region = .*/region = $REGION/" -e "/\[profile $PROFILE_NAME\]/,/^$/ s/output = .*/output = $OUTPUT_FORMAT/" "$AWS_CONFIG_FILE"
+    else
+        echo -e "[profile $PROFILE_NAME]\nregion = $REGION\noutput = $OUTPUT_FORMAT" >> "$AWS_CONFIG_FILE"
+    fi
+    
     # Updating ~/.aws/credentials
-    if ! grep -q "\[$PROFILE_NAME\]" "$AWS_CREDENTIALS_FILE" 2>/dev/null; then
-        echo -e "\n[$PROFILE_NAME]\naws_access_key_id = $AWS_ACCESS_KEY_ID\naws_secret_access_key = $AWS_SECRET_ACCESS_KEY" >> "$AWS_CREDENTIALS_FILE"
+    if grep -q "\[default\]" "$AWS_CREDENTIALS_FILE" 2>/dev/null; then
+        sed -i '' -e "/\[default\]/,/^$/ s/aws_access_key_id = .*/aws_access_key_id = $AWS_ACCESS_KEY_ID/" -e "/\[default\]/,/^$/ s/aws_secret_access_key = .*/aws_secret_access_key = $AWS_SECRET_ACCESS_KEY/" "$AWS_CREDENTIALS_FILE"
+    else
+        echo -e "[default]\naws_access_key_id = $AWS_ACCESS_KEY_ID\naws_secret_access_key = $AWS_SECRET_ACCESS_KEY" > "$AWS_CREDENTIALS_FILE"
     fi
-
+    
+    if grep -q "\[$PROFILE_NAME\]" "$AWS_CREDENTIALS_FILE" 2>/dev/null; then
+        sed -i '' -e "/\[$PROFILE_NAME\]/,/^$/ s/aws_access_key_id = .*/aws_access_key_id = $AWS_ACCESS_KEY_ID/" -e "/\[$PROFILE_NAME\]/,/^$/ s/aws_secret_access_key = .*/aws_secret_access_key = $AWS_SECRET_ACCESS_KEY/" "$AWS_CREDENTIALS_FILE"
+    else
+        echo -e "[$PROFILE_NAME]\naws_access_key_id = $AWS_ACCESS_KEY_ID\naws_secret_access_key = $AWS_SECRET_ACCESS_KEY" >> "$AWS_CREDENTIALS_FILE"
+    fi
+    
     echo "AWS profile '$PROFILE_NAME' configured successfully."
 fi
